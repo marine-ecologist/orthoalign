@@ -1,6 +1,9 @@
-# Drone orthomosaic co-registration for time-Series change detection and multi-date orthomosaic stacking"
+# Drone orthomosaic co-registration for time-Series change detection and multi-date stacking"
 
 With timeseries analysis of drone orthomosaics, artefacts in orthomosaic creation or image processing may lead to spatial differences in features that require alignment for paired time-points. `orthoalign` is a desktop Python/tkinter tool for co-registering (aligning two or more orthomosaics so that identical geographic features occupy the same coordinates) designed for time-series change detection in drone orthomosaics. 
+
+<img width="800" height="488" alt="orthoalign1" src="https://github.com/user-attachments/assets/9f0f1e71-8194-4898-b7f7-0c7e1746f430" />
+
 
 `orthoalign` presents a geographically synchronised split-screen view of a reference and target raster allowing the user to place matching Ground Control Point (GCP[^1]) pairs on each panel. Once all required features are matched, `orthoalign` warps the target orthomosaic into alignment with the reference to produce a corrected GeoTIFF. `orthoalign` supports affine, polynomial, and thin-plate spline transforms with auto-selection based on GCP count.
 
