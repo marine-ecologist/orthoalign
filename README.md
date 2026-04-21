@@ -1,9 +1,9 @@
-# Drone orthomosaic co-registration for time-Series change detection and multi-date stacking"
-
-With timeseries analysis of drone orthomosaics, artefacts in orthomosaic creation or image processing may lead to spatial differences in features that require alignment for paired time-points. `orthoalign` is a desktop Python/tkinter tool for co-registering (aligning two or more orthomosaics so that identical geographic features occupy the same coordinates) designed for time-series change detection in drone orthomosaics. 
+# Drone orthomosaic co-registration for time-series change detection
 
 <img width="800" height="488" alt="orthoalign1" src="https://github.com/user-attachments/assets/9f0f1e71-8194-4898-b7f7-0c7e1746f430" />
 
+
+With timeseries analysis of drone orthomosaics, artefacts in orthomosaic creation or image processing may lead to spatial differences in features that require alignment for paired time-points. `orthoalign` is a desktop Python/tkinter tool for co-registering (aligning two or more orthomosaics so that identical geographic features occupy the same coordinates) designed for time-series change detection in drone orthomosaics. 
 
 `orthoalign` presents a geographically synchronised split-screen view of a reference and target raster allowing the user to place matching Ground Control Point (GCP[^1]) pairs on each panel. Once all required features are matched, `orthoalign` warps the target orthomosaic into alignment with the reference to produce a corrected GeoTIFF. `orthoalign` supports affine, polynomial, and thin-plate spline transforms with auto-selection based on GCP count.
 
@@ -16,7 +16,7 @@ Additional features include a toggleable metric grid overlay, `.points` export, 
 
 ---
 
-## Requirements
+## Installation / requirements
 
 ```bash
 pip install rasterio numpy Pillow scipy
@@ -33,22 +33,12 @@ Python 3.9+ recommended. Tested on macOS (Apple Silicon and Intel) and Linux.
 
 ---
 
-## Installation
-
 ```bash
 # Clone or download the script, then install dependencies
 pip install rasterio numpy Pillow scipy
 
 # Run directly
 python3 gcp_calibrator_v5.py <reference> <target>
-```
-
-### Standalone binary (optional)
-
-```bash
-pip install pyinstaller
-pyinstaller --onefile --windowed gcp_calibrator_v5.py
-# Output: dist/gcp_calibrator_v5  (macOS/Linux) or dist/gcp_calibrator_v5.exe (Windows)
 ```
 
 ---
@@ -72,7 +62,6 @@ python3 gcp_calibrator_v5.py <reference> <target> [options]
 | `reference` | Path to the reference (base) raster — the image to align **to** |
 | `target` | Path to the target raster — the image to be warped and corrected |
 
-### Additional options
 
 | Flag | Default | Description |
 |---|---|---|
@@ -81,21 +70,16 @@ python3 gcp_calibrator_v5.py <reference> <target> [options]
 | `--tile-pixels <N>` | `500000` | TPS only — maximum query points per RBF tile. Lower values reduce peak RAM at the cost of speed. e.g. `--tile-pixels 100000` for systems with limited memory |
 | `--tps-smoothing <S>` | `0.0` | TPS only — smoothing factor for the radial basis function. `0` = exact interpolation through all GCPs. Values of 1–10 are useful for noisy drone-to-satellite co-registration |
 
-### Examples
+---
 
-```bash
-# Minimal — auto transform, output written next to target
-python3 gcp_calibrator_v5.py before_ortho.tif after_ortho.tif
+## Transform methods
 
-# Explicit output path
-python3 gcp_calibrator_v5.py before_ortho.tif after_ortho.tif --output after_corrected.tif
-
-# Force polynomial transform
-python3 gcp_calibrator_v5.py before_ortho.tif after_ortho.tif -t polynomial
-
-# TPS with smoothing, reduced tile size for low-RAM systems
-python3 gcp_calibrator_v5.py before_ortho.tif after_ortho.tif -t tps --tps-smoothing 5 --tile-pixels 100000
-```
+| Method | Description | Use case |
+|---|---|---|
+| `affine` | 6-parameter linear transform (translation, rotation, scale, shear). ≥ 3 GCPs | Simple offset, rotation or scale difference between orthomosaics |
+| `polynomial` | Rubber-sheet warp via rasterio GCP reprojection. ≥ 3 GCPs | Moderate non-linear distortion from lens curvature or terrain relief |
+| `tps` | Thin-plate spline fitted through all GCPs via `RBFInterpolator`. Tiled processing controls peak RAM | Severe non-linear distortion across multi-date drone surveys |
+| `auto` | Selects method by GCP count: ≤4 → affine, 5–8 → polynomial, ≥9 → tps | Default — recommended for most use cases |
 
 ---
 
@@ -143,33 +127,6 @@ Use the **Grid** checkbox and spinbox in the bottom panel to overlay a metric gr
 
 ---
 
-## Transform methods
-
-### `affine`
-
-A 6-parameter linear transform (translation, rotation, scale, shear). Best when the target is a well-formed raster that is simply offset, rotated, or scaled relative to the reference. Requires ≥ 3 GCPs. The output grid is pixel-for-pixel identical to the reference.
-
-### `polynomial`
-
-A higher-order rubber-sheet warp using rasterio's GCP reprojection. Handles moderate non-linear distortions such as lens curvature or mild terrain relief. Requires ≥ 3 GCPs; accuracy improves with more. Output grid matches the reference exactly.
-
-### `tps` — Thin-Plate Spline
-
-Fits a smooth surface through all GCPs using radial basis functions (`scipy.interpolate.RBFInterpolator`). Handles severe non-linear distortions — useful for co-registering multi-date drone surveys, scanned maps, or imagery with significant terrain warp. Output is processed in spatial tiles to control peak RAM. With `--tps-smoothing 0` (default) the warp passes exactly through every GCP; positive smoothing relaxes this constraint for noisy control points.
-
-**RAM note:** peak RAM for TPS scales as `tile_pixels × n_gcps × 8 bytes`. The default 500 000 tile size with 20 GCPs uses ~80 MB per tile. Reduce `--tile-pixels` if you run out of memory on large outputs.
-
-### `auto` (default)
-
-Selects based on the number of paired GCPs at calibration time:
-
-```
-≤ 4 GCPs  →  affine
-5 – 8     →  polynomial
-≥ 9       →  tps
-```
-
----
 
 ## Output
 
@@ -180,29 +137,8 @@ The corrected raster is a GeoTIFF with:
 - LZW compression (BigTIFF format if the uncompressed size would exceed 3 GB)
 - Exported `.points` files follow the QGIS Georeferencer format
 
-```
-
-
----
-
-## Architecture notes
-
-```
-main()
-└── GCPApp
-    ├── SharedView          # single map-coordinate viewport shared by both panels
-    ├── ImagePanel (×2)     # tkinter canvas, renders raster crop + grid + GCP markers
-    │   └── _draw_grid()    # visual metric grid, canvas-only, not saved
-    ├── GCPTable            # ttk.Treeview showing all placed points
-    └── compute_corrected_raster()
-        ├── affine / polynomial  →  rasterio.warp.reproject()
-        └── tps                  →  scipy RBFInterpolator + scipy.ndimage.map_coordinates()
-```
-
-Rasters are loaded once at display resolution using `rasterio` with bilinear downsampling. The full-resolution pixel coordinates are tracked separately for all GCPs so calibration always operates on the original data.
-
 ---
 
 ## License
 
-MIT
+GPL v3 
